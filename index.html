@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>網路交友安全辨識遊戲（馬卡龍版）</title>
+<style>
+  :root{
+    --bg:#fffaf6;
+    --card:#ffffff;
+    --muted:#6b7280;
+    --text:#241332;
+    --radius:14px;
+    --shadow-soft:0 10px 30px rgba(36,19,50,0.06);
+    --maxw:980px;
+    --player-bubble-bg: #e0efff;
+    --player-text: #0b3e2f;
+    --border-strong: rgba(0,0,0,0.12); /* lighter border per request */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:linear-gradient(180deg,var(--bg),#fbfbff); color:var(--text); -webkit-font-smoothing:antialiased;}
+
+  /* center frame and limit height so entire game fits in one viewport */
+  .page{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px;}
+  .container{width:100%; max-width:var(--maxw); height:calc(100vh - 32px);} 
+
+  /* gameCard: grid layout with fixed header/control/footer and a flexible chat area that scrolls */
+  .gameCard{background:var(--card); border-radius:18px; padding:12px; box-shadow:var(--shadow-soft); overflow:hidden; display:grid; grid-template-rows:auto 1fr auto auto; gap:12px; position:relative; max-height:100%; border:1px solid var(--border-strong)}
+  h1{margin:0; font-size:20px; text-align:center}
+  p.lead{margin:0;color:var(--muted); font-size:14px; text-align:center}
+
+  /* homepage layout: no big logo text, just centered title + avatars + start button */
+  #home{display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; padding:18px 12px; min-height:220px}
+  .home-avatars{ display:flex; gap:14px; align-items:center; justify-content:center; flex-wrap:wrap }
+  .home-avatar{ width:64px; height:64px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:28px; box-shadow:0 6px 18px rgba(36,19,50,0.04); border:1px solid var(--border-strong); background:linear-gradient(135deg,#ffffff, #fffaf6); }
+  .home-avatar .label{ display:block; font-size:12px; color:var(--muted); margin-top:6px; text-align:center }
+  #startBtn{ padding:12px 18px; border-radius:12px; font-weight:800; background:linear-gradient(90deg,#ffd6a5,#fff0d6); color:var(--text); border:1px solid rgba(0,0,0,0.06); box-shadow:0 8px 26px rgba(111,66,193,0.06); cursor:pointer }
+
+  /* header */
+  #opponentHeader{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px; border:1px solid var(--border-strong)}
+  .op-left{display:flex;align-items:center;gap:12px}
+  .op-avatar{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px; box-shadow:0 6px 18px rgba(36,19,50,0.04); border:1px solid var(--border-strong);}
+  .op-name{font-weight:800}
+  .opSubtitle{font-size:13px;color:var(--muted); font-weight:700}
+  .op-center{flex:1; text-align:center; min-width:0}
+  .op-center h2{margin:0; font-size:16px; white-space:normal; word-break:break-word}
+  .op-right{ min-width:160px; text-align:right; display:flex; gap:8px; align-items:center; justify-content:flex-end }
+
+  /* sound button inline (emoji) */
+  .sound-inline{ width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; border:1px solid var(--border-strong); background:var(--card); cursor:pointer; font-size:18px }
+  .sound-inline.muted{ background:#fff }
+  .sound-inline.on{ background: linear-gradient(90deg,#c7b8ff,#e6d8ff); }
+
+  /* score - increased size per request */
+  #scoreDisplay{ background:#fff; border-radius:12px; padding:8px 12px; box-shadow:var(--shadow-soft); font-weight:900; font-size:16px; color:var(--text); border:1px solid var(--border-strong); }
+
+  /* chat */
+  .chatAreaWrap{border-radius:12px; overflow:hidden; border:1px solid var(--border-strong); background:linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,1)); display:flex; flex-direction:column; min-height:0 }
+  .chat{padding:12px 14px; overflow:auto; background:transparent; display:block; min-height:0; -webkit-overflow-scrolling:touch}
+  .msgRow{display:flex; margin:8px 0; align-items:flex-end; gap:10px}
+  .msgBubble{padding:10px 14px; border-radius:14px; max-width:72%; word-break:break-word; box-shadow: 0 6px 18px rgba(2,6,23,0.04); border:1px solid rgba(0,0,0,0.06);}
+  .npcBubble{ color:var(--text); border-top-left-radius:6px; }
+  .playerBubble{ background: linear-gradient(180deg, var(--player-bubble-bg), #cfeeff); color:var(--player-text); margin-left:auto; border-top-right-radius:6px; }
+
+  /* typing bubble */
+  .typingBubble{ border-radius:12px; padding:10px 12px; display:inline-flex; align-items:center; gap:10px; border:2px solid rgba(0,0,0,0.06); }
+  .typingText{font-size:13px;color:var(--muted); font-weight:700}
+
+  /* control */
+  #controlArea{display:flex; gap:10px; align-items:center; padding:10px 0;}
+  #playerInput{flex:1;padding:10px 12px;border-radius:12px;border:1px solid var(--border-strong); background:linear-gradient(180deg,#fff,#fffaf8); caret-color:var(--text)}
+  #playerInput.noCaret{ caret-color: transparent; }
+  #sendBtn{background:linear-gradient(90deg,#c7b8ff,#e6d8ff); color:var(--text); border:1px solid var(--border-strong); padding:10px 14px; border-radius:12px}
+  button.small{padding:8px 10px; border-radius:10px; display:inline-flex; gap:8px; align-items:center; cursor:pointer; border:1px solid var(--border-strong); background:var(--card)}
+  .btnIcon{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px; border:1px solid var(--border-strong)}
+  .safeIcon{background:linear-gradient(90deg,#b8f2d0,#9fe9c6); color:#064e3b}
+  .dangerIcon{background:linear-gradient(90deg,#ffd6d6,#ffb4b4); color:#7f1d1d}
+  .small.btn-correct{ background:linear-gradient(90deg,#d7fbe6,#b8f2d0); border-color:rgba(30,150,110,0.22); }
+  .small.btn-wrong{ background:linear-gradient(90deg,#ffdede,#ffb4b4); border-color:rgba(220,80,80,0.18); }
+
+  /* footer */
+  .gameFooter{display:flex; gap:12px; align-items:flex-start; margin-top:8px;}
+  #dangerBoard{flex:1; padding:12px; background:linear-gradient(180deg,#fff7f7,#fff5f5); border:1px solid rgba(239,68,68,0.06); border-radius:22px; min-height:64px; color:#7f1d1d; overflow:auto; white-space:pre-wrap; word-break:break-word; max-height:160px}
+  @media (max-width:520px){ #dangerBoard{ max-height:120px } }
+  #levelEndNotice{min-width:220px; padding:12px; border-radius:12px; background:linear-gradient(180deg,#f3f0ff,#f9f7ff); border:1px solid rgba(111,66,193,0.06); color:var(--text); font-weight:700; display:none}
+
+  /* next button fixed for desktop, static for small screens */
+  #nextBtn{position:fixed; right:22px; bottom:22px; z-index:200; display:none; padding:12px 20px; border-radius:14px; border:1px solid var(--border-strong); background:linear-gradient(90deg,#c7b8ff,#e6d8ff); color:var(--text); box-shadow:0 18px 46px rgba(111,66,193,0.12); font-weight:800}
+  @media (max-width:520px){ #nextBtn{ position:static; display:none; margin-top:8px; align-self:flex-end } .op-center h2{ white-space:normal; } .op-right{ min-width:0; flex-direction:row-reverse; gap:8px } #scoreDisplay{ font-size:13px } }
+
+  #restartFinalBtn{ background:linear-gradient(90deg,#ffd6a5,#fff0d6); color:var(--text); border:1px solid var(--border-strong); padding:10px 14px; border-radius:12px; font-weight:800 }
+
+  /* confetti */
+  #confetti{ position:fixed; left:0; top:0; width:100%; height:100%; pointer-events:none; overflow:hidden; z-index:450 }
+  .confetti-piece{ position:fixed; will-change:transform, top, opacity; border-radius:2px }
+
+  @media (max-width:860px){ .chat{height:auto} .gameCard{padding:12px} .op-center h2{ font-size:15px } }
+  @media (max-width:520px){ .chat{height:auto} .op-avatar{width:44px;height:44px} .gameFooter{flex-direction:column} .op-center h2{ font-size:14px } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="container">
+    <div id="gameCard" class="gameCard" role="main">
+
+      <!-- HOME -->
+      <div id="home">
+        <div style="text-align:center">
+          <h1>網路交友安全辨識遊戲</h1>
+          <p class="lead">練習判斷對話中的風險，保護個人資料與隱私。</p>
+        </div>
+
+        <div class="home-avatars" id="homeList" aria-hidden="false">
+          <!-- avatars inserted by JS: each has full logo background + border -->
+        </div>
+
+        <div style="display:flex; gap:12px; justify-content:center; margin-top:8px">
+          <button id="startBtn">開始遊戲</button>
+        </div>
+      </div>
+
+      <!-- GAME -->
+      <div id="game" style="display:none" aria-labelledby="levelTitle">
+
+        <div id="opponentHeader">
+          <div class="op-left">
+            <div id="opAvatar" class="op-avatar">🐱</div>
+            <div style="display:flex; flex-direction:column;">
+              <div id="opName" class="op-name">網友1</div>
+              <div class="opSubtitle" id="opSubtitle">線上</div>
+            </div>
+          </div>
+          <div class="op-center"><h2 id="levelTitle">關卡</h2></div>
+          <div class="op-right">
+            <div id="scoreDisplay">本關分數: 0 | 累積分數: 0</div>
+            <button id="soundBtn" class="sound-inline muted" title="切換音效">🔇</button>
+          </div>
+        </div>
+
+        <div class="chatAreaWrap">
+          <div class="chat" id="chatArea" aria-live="polite"></div>
+        </div>
+
+        <div id="controlArea">
+          <button id="safeBtn" class="small"><span class="btnIcon safeIcon">✓</span> <span class="btnLabel">安全</span></button>
+          <button id="dangerBtn" class="small"><span class="btnIcon dangerIcon">!</span> <span class="btnLabel">危險</span></button>
+          <input id="playerInput" type="text" class="noCaret" placeholder="先按安全或危險，再輸入回覆" disabled />
+          <button id="sendBtn">送出</button>
+        </div>
+
+        <div class="gameFooter">
+          <div id="dangerBoard" aria-live="polite">暫無危險提示</div>
+          <div id="levelEndNotice">本關已結束，請按「下一關」。</div>
+        </div>
+
+        <button id="nextBtn">下一關</button>
+      </div>
+
+      <!-- RESULT -->
+      <div id="result" style="display:none">
+        <h2>遊戲結束 🎉</h2>
+        <div id="finalScore" style="font-weight:800; margin-bottom:8px;"></div>
+        <div id="finalMessage" style="margin-bottom:10px; font-weight:700;"></div>
+        <div style="margin-bottom:10px;"><button id="restartFinalBtn">回到首頁</button></div>
+        <h3 style="margin-bottom:8px">危險對話提醒（所有危險對話，含原因）</h3>
+        <div id="dangerSummary" style="white-space:pre-line; padding:12px; background:#fff8f8; border:1px solid #f87171; border-radius:8px; max-height:60vh; overflow:auto;"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- confetti -->
+<div id="confetti"></div>
+
+<!-- Audios -->
+<audio id="bgMusic" loop src="strawberry-358303.mp3"></audio>
+<audio id="correctSound" src="correct.mp3"></audio>
+<audio id="wrongSound" src="error.mp3"></audio>
+<audio id="perfectSound" src="perfect.mp3"></audio>
+<audio id="multiPop" src="multi-pop.mp3"></audio>
+
+<script>
+/* data */
+const levelData = [
+  { title:'第一關', opponent:{name:'網友1', avatar:'🐱', color:'#ffcced'}, dialogues:[
+      { text:'嗨！剛剛看到你分享的跑步照片，很有活力，你常去哪裡跑步？', danger:false },
+      { text:'我上週參加學校的路跑，想知道你平常訓練怎麼安排？', danger:false },
+      { text:'可以把你的比賽成績給我看看嗎？我想比較一下。', danger:true, reason:'比賽成績屬個人資訊，可能被用來評價或追蹤' }
+    ], answers:[], score:0 },
+  { title:'第二關', opponent:{name:'網友2', avatar:'🐶', color:'#bfeaff'}, dialogues:[
+      { text:'嗨～今天有沒有發生什麼好玩的事？', danger:false },
+      { text:'剛開學有交到新朋友嗎？', danger:false },
+      { text:'新學習加油囉!', danger:false }
+    ], answers:[], score:0 },
+  { title:'第三關', opponent:{name:'網友3', avatar:'🦊', color:'#c8facc'}, dialogues:[
+      { text:'你的自拍很有特色，最近在用哪個濾鏡？', danger:false },
+      { text:'可以給我一張你單獨的私密自拍嗎？我很想看真實的你～', danger:true, reason:'要求私人照片可能導致濫用或外流' },
+      { text:'如果不方便也沒關係，我們可以多聊聊興趣喔!', danger:false }
+    ], answers:[], score:0 },
+  { title:'第四關', opponent:{name:'網友4', avatar:'🐼', color:'#fff6b3'}, dialogues:[
+      { text:'嗨，我們隊缺一個隊友玩合作遊戲，你想加入嗎？', danger:false },
+      { text:'我們通常周末練一小時，大家都很友善。', danger:false },
+      { text:'請問你的遊戲暱稱是什麼？（不是帳號或密碼）', danger:false }
+    ], answers:[], score:0 },
+  { title:'第五關', opponent:{name:'網友5', avatar:'🦄', color:'#ffd1ba'}, dialogues:[
+      { text:'我最近失戀了，好難過喔!', danger:false },
+      { text:'還好有一群家人、朋友的陪伴，讓我不至於太低落', danger:false },
+      { text:'好奇你現在有在交往嗎？可以告訴我對方的名字嗎？', danger:true, reason:'詢問感情私人資訊不適合公開' }
+    ], answers:[], score:0 }
+];
+
+/* state */
+let currentLevel=0, currentDialogue=0, choiceMade=false, cumulativeScore=0; let soundEnabled=false, confettiActive=false;
+const bgMusic=document.getElementById('bgMusic');
+const correctSound=document.getElementById('correctSound');
+const wrongSound=document.getElementById('wrongSound');
+const perfectSound=document.getElementById('perfectSound');
+const multiPop=document.getElementById('multiPop');
+
+/* dom */
+const gameCard=document.getElementById('gameCard');
+const homeEl=document.getElementById('home'), gameEl=document.getElementById('game'), resultEl=document.getElementById('result');
+const startBtn=document.getElementById('startBtn');
+const opAvatarEl=document.getElementById('opAvatar'), opNameEl=document.getElementById('opName'), opSubtitle=document.getElementById('opSubtitle');
+const chatArea=document.getElementById('chatArea'), playerInput=document.getElementById('playerInput'), sendBtn=document.getElementById('sendBtn');
+const safeBtn=document.getElementById('safeBtn'), dangerBtn=document.getElementById('dangerBtn');
+const dangerBoard=document.getElementById('dangerBoard'), levelEndNotice=document.getElementById('levelEndNotice');
+const scoreDisplay=document.getElementById('scoreDisplay'), nextBtn=document.getElementById('nextBtn');
+const resultScore=document.getElementById('finalScore'), resultMsg=document.getElementById('finalMessage'), dangerSummary=document.getElementById('dangerSummary');
+const restartFinalBtn=document.getElementById('restartFinalBtn');
+const soundBtn=document.getElementById('soundBtn');
+const homeList=document.getElementById('homeList');
+const confettiEl=document.getElementById('confetti');
+
+/* render home avatars: full logo backgrounds + border, centered */
+function renderHomeAvatars(){ homeList.innerHTML=''; levelData.forEach((l,i)=>{ const w=document.createElement('div'); w.className='home-avatar'; w.style.background = `linear-gradient(135deg, ${l.opponent.color}, #ffffffcc)`; w.style.border = '1px solid var(--border-strong)'; w.innerText = l.opponent.avatar; const label = document.createElement('div'); label.className='label'; label.innerText = '網友' + (i+1); label.style.fontSize='12px'; label.style.color='var(--muted)'; const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.flexDirection='column'; wrap.style.alignItems='center'; wrap.appendChild(w); wrap.appendChild(label); homeList.appendChild(wrap); }); }
+
+/* UI states */
+function showHome(){ homeEl.style.display='flex'; gameEl.style.display='none'; resultEl.style.display='none'; scoreDisplay.style.display='none'; soundBtn.style.display='none'; gameCard.style.paddingBottom='16px'; renderHomeAvatars(); }
+function showGame(){ homeEl.style.display='none'; gameEl.style.display='block'; resultEl.style.display='none'; scoreDisplay.style.display='block'; soundBtn.style.display='inline-flex'; }
+function showResult(){ homeEl.style.display='none'; gameEl.style.display='none'; resultEl.style.display='block'; scoreDisplay.style.display='none'; soundBtn.style.display='inline-flex'; gameCard.style.paddingBottom='16px'; }
+
+/* helpers */
+function darken(hex, amt){ const h=hex.replace('#',''); const bigint=parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h,16); const r=(bigint>>16)&255,g=(bigint>>8)&255,b=bigint&255; const nr=Math.max(0,Math.min(255,Math.round(r*(1-amt)))), ng=Math.max(0,Math.min(255,Math.round(g*(1-amt)))), nb=Math.max(0,Math.min(255,Math.round(b*(1-amt)))); return `rgba(${nr},${ng},${nb},1)`; }
+function rgba(hex,a){ const h=hex.replace('#',''); const bigint=parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h,16); const r=(bigint>>16)&255,g=(bigint>>8)&255,b=bigint&255; return `rgba(${r},${g},${b},${a})`; }
+
+/* typing + bubble uses npc color */
+function appendNpcWithTyping(text, avatar){ if(!dangerBoard.innerText) dangerBoard.innerText='暫無危險提示'; const row=document.createElement('div'); row.className='msgRow'; const avatarWrap=document.createElement('div'); avatarWrap.className='op-avatar'; avatarWrap.innerText=avatar; avatarWrap.style.background = window.currentNpcColor ? `linear-gradient(135deg, ${window.currentNpcColor}, #ffffffcc)` : ''; const bubble=document.createElement('div'); bubble.className='typingBubble'; const typingText=document.createElement('div'); typingText.className='typingText'; typingText.innerText='對方正在輸入…'; const dots=document.createElement('div'); dots.className='dots'; dots.innerHTML='<span></span><span></span><span></span>'; bubble.appendChild(typingText); bubble.appendChild(dots);
+  const col = window.currentNpcColor || '#e9eef8'; bubble.style.background = `linear-gradient(180deg, ${col}, #ffffffcc)`; bubble.style.border = `2px solid ${rgba(darken(col,0.18),0.22)}`;
+  row.appendChild(avatarWrap); row.appendChild(bubble); chatArea.appendChild(row);
+  // ensure chat area scrollable but user can scroll up; keep automatic scroll only when at/near bottom
+  const base=600, perChar=30, maxTime=2200; const time=Math.min(base + (text.length * perChar), maxTime);
+  return new Promise(resolve=>{ setTimeout(()=>{ bubble.className='msgBubble npcBubble'; bubble.innerText=text; bubble.style.background = `linear-gradient(180deg, ${col}, #ffffffcc)`; bubble.style.borderLeft = `4px solid ${rgba(darken(col,0.18),0.28)}`; 
+      // only auto-scroll if user is near bottom (so user can scroll up freely)
+      const nearBottom = (chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight) < 80;
+      if(nearBottom) chatArea.scrollTop = chatArea.scrollHeight;
+      playSound(multiPop); resolve(); }, time); }); }
+
+function appendPlayer(text){ const row=document.createElement('div'); row.className='msgRow'; const bubble=document.createElement('div'); bubble.className='msgBubble playerBubble'; bubble.innerText=text; row.appendChild(bubble); row.style.justifyContent='flex-end'; chatArea.appendChild(row); chatArea.scrollTop = chatArea.scrollHeight; playSound(multiPop); }
+
+function updateScoreDisplay(){ const level=levelData[currentLevel]||{}; const cs=level.score||0; scoreDisplay.innerText=`本關分數: ${cs} | 累積分數: ${cumulativeScore}`; }
+
+function setOpponentStyle(color){ const darker=darken(color,0.18); const header=document.getElementById('opponentHeader'); header.style.background=`linear-gradient(90deg, ${rgba(darker,0.12)}, rgba(255,255,255,0))`; opAvatarEl.style.background=`linear-gradient(135deg, ${color}, #ffffffcc)`; opAvatarEl.style.border='1px solid var(--border-strong)'; window.currentNpcColor=color; }
+
+function loadLevel(){ chatArea.innerHTML=''; dangerBoard.innerText='暫無危險提示'; nextBtn.style.display='none'; levelEndNotice.style.display='none'; playerInput.value=''; playerInput.disabled=true; playerInput.readOnly=true; playerInput.classList.add('noCaret'); safeBtn.classList.remove('btn-correct','btn-wrong'); dangerBtn.classList.remove('btn-correct','btn-wrong'); choiceMade=false; currentDialogue=0; const level=levelData[currentLevel]; opAvatarEl.innerText=level.opponent.avatar; opNameEl.innerText=level.opponent.name; opSubtitle.innerText='線上'; setOpponentStyle(level.opponent.color); const titleEl=document.getElementById('levelTitle'); const titleText=`${level.title}（第 ${currentLevel+1} 關 / 共 ${levelData.length} 關）`; titleEl.innerText=titleText; titleEl.title=titleText; updateScoreDisplay(); appendNpcWithTyping(level.dialogues[currentDialogue].text, level.opponent.avatar).then(()=>{}); }
+
+function handleChoice(isDanger){ if(choiceMade) return; choiceMade=true; const level=levelData[currentLevel]; const dlg=level.dialogues[currentDialogue]; const correct=(dlg.danger===isDanger); level.answers[currentDialogue]=correct; if(correct){ playSound(correctSound); } else { playSound(wrongSound); if(dlg.danger && !isDanger){ const tip=`❌ 第${currentDialogue+1}題：${dlg.text}
+其實這是危險的，原因：${dlg.reason||'無'}
+
+`; dangerBoard.innerText = (dangerBoard.innerText==='暫無危險提示'?'':dangerBoard.innerText) + tip; dangerBoard.scrollTop = dangerBoard.scrollHeight; dangerBoard.scrollIntoView({behavior:'smooth', block:'nearest'}); showToast('發現未注意到的危險 — 已在提醒區記錄',2200); } if(!dlg.danger && isDanger){ showToast('判斷為「危險」但此回應實際為安全 — 此誤判不會列入關卡總結',3600); } }
+  const btn=isDanger?dangerBtn:safeBtn; safeBtn.classList.remove('btn-correct','btn-wrong'); dangerBtn.classList.remove('btn-correct','btn-wrong'); btn.classList.add(correct? 'btn-correct' : 'btn-wrong'); playerInput.disabled=false; playerInput.readOnly=false; playerInput.classList.remove('noCaret'); playerInput.focus(); }
+
+function sendPlayerInput(){ if(!choiceMade) return; const val=playerInput.value.trim(); if(!val) return; appendPlayer(val); playerInput.value=''; playerInput.disabled=true; playerInput.readOnly=true; playerInput.classList.add('noCaret'); safeBtn.classList.remove('btn-correct','btn-wrong'); dangerBtn.classList.remove('btn-correct','btn-wrong'); choiceMade=false; currentDialogue++; const level=levelData[currentLevel]; if(currentDialogue<level.dialogues.length){ appendNpcWithTyping(level.dialogues[currentDialogue].text, level.opponent.avatar).then(()=>{}); } else { const allCorrect=level.answers.length===level.dialogues.length&&level.answers.every(x=>x===true); level.score=allCorrect?20:0; if(allCorrect){ playSound(perfectSound); showConfetti(); }
+  cumulativeScore+=level.score; updateScoreDisplay(); let errors=''; level.dialogues.forEach((d,i)=>{ if(d.danger && !level.answers[i]) { errors+=`❌ 第${i+1}題：${d.text} 原因：${d.reason||'無'}
+
+`; } }); dangerBoard.innerText = errors || '本關無錯誤！'; dangerBoard.scrollTop = dangerBoard.scrollHeight; dangerBoard.scrollIntoView({behavior:'smooth', block:'nearest'});
+  if(currentLevel<levelData.length-1){ nextBtn.style.display='block'; levelEndNotice.style.display='block'; levelEndNotice.innerText='本關已結束，請按「下一關」。'; if(window.matchMedia('(max-width:520px)').matches){ nextBtn.style.position='static'; } else { nextBtn.style.position='fixed'; gameCard.style.paddingBottom='120px'; }
+      nextBtn.dataset.type='next'; nextBtn.innerText='下一關'; nextBtn.focus();
+  } else {
+      nextBtn.style.display='block'; levelEndNotice.style.display='block'; levelEndNotice.innerText='遊戲已結束，請按「遊戲結束」。'; nextBtn.dataset.type='finish'; nextBtn.innerText='遊戲結束'; if(window.matchMedia('(max-width:520px)').matches){ nextBtn.style.position='static'; } else { nextBtn.style.position='fixed'; gameCard.style.paddingBottom='120px'; } nextBtn.focus();
+  } } }
+
+function showConfetti(){ confettiActive=true; confettiEl.innerHTML=''; const colors=['#ff7ab6','#ffd166','#c7f9cc','#a7d8ff','#ffd1ba','#e6d8ff']; const rows=5; const perRow=24; for(let r=0;r<rows;r++){ const delayBase = r * 120; for(let i=0;i<perRow;i++){ const e=document.createElement('div'); e.className='confetti-piece'; const left = (i/perRow*100) + (Math.random()*3); e.style.left = left + '%'; e.style.top = (-10 - r*6) + 'vh'; e.style.width = (6 + Math.random()*14) + 'px'; e.style.height = (8 + Math.random()*26) + 'px'; e.style.background = colors[Math.floor(Math.random()*colors.length)]; e.style.opacity = 0.95; e.style.transform = 'rotate('+(Math.random()*360)+'deg)'; e.style.transition = `transform 3.4s linear ${delayBase}ms, top 3.4s linear ${delayBase}ms, opacity 3.4s linear ${delayBase}ms`; confettiEl.appendChild(e); setTimeout(()=>{ try{ e.style.top = (110 + Math.random()*10) + 'vh'; e.style.transform = 'rotate('+(720+Math.random()*720)+'deg)'; e.style.opacity = 0.95; }catch(err){} }, 50 + delayBase); setTimeout(()=>{ try{ if(confettiEl.contains(e)) confettiEl.removeChild(e); }catch(err){} }, 3800 + delayBase);
+    }
+  }
+  setTimeout(()=>{ confettiActive=false; gameCard.style.paddingBottom='16px'; }, 5000);
+}
+
+function playSound(el){ if(!soundEnabled) return; try{ const src=el&&el.getAttribute&&el.getAttribute('src'); if(!src) return; const s=new Audio(src); s.volume=0.24; s.play().catch(()=>{}); }catch(e){} }
+
+function saveRecordAndShowResult(){ let summary=''; levelData.forEach((lvl,li)=>{ lvl.dialogues.forEach((d,di)=>{ if(d.danger){ const answered=Array.isArray(lvl.answers)?!!lvl.answers[di]:false; summary+=`第${li+1}關 第${di+1}題: ${d.text}
+⚠️ 危險原因: ${d.reason||'無'}
+判斷: ${answered? '✅ 你判斷為危險 (正確)' : '❌ 你判斷錯誤或未判斷為危險'}
+
+`; } }); }); resultScore.innerText=`你的總分是：${cumulativeScore}`; dangerSummary.innerText=summary||'沒有危險對話'; gameCard.style.paddingBottom='16px'; showResult(); }
+
+function showToast(msg,duration=3000){ let t=document.getElementById('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; t.style.position='fixed'; t.style.left='50%'; t.style.bottom='24px'; t.style.transform='translateX(-50%)'; t.style.background='rgba(36,19,50,0.95)'; t.style.color='#fff'; t.style.padding='10px 14px'; t.style.borderRadius='12px'; t.style.zIndex=9999; document.body.appendChild(t); } t.innerText=msg; t.style.display='block'; clearTimeout(t._timer); t._timer=setTimeout(()=>{ t.style.display='none'; }, duration); }
+
+/* events */
+startBtn.addEventListener('click', ()=>{ levelData.forEach(l=>{ l.answers=[]; l.score=0; }); currentLevel=0; currentDialogue=0; choiceMade=false; cumulativeScore=0; soundEnabled=true; try{ bgMusic.volume=0.08; bgMusic.play().catch(()=>{}); }catch(e){} showGame(); loadLevel(); });
+
+// sound toggle
+soundBtn.addEventListener('click', ()=>{ soundEnabled=!soundEnabled; if(soundEnabled){ soundBtn.classList.remove('muted'); soundBtn.classList.add('on'); soundBtn.setAttribute('aria-pressed','true'); soundBtn.innerText='🔊'; try{ bgMusic.volume=0.08; bgMusic.play().catch(()=>{}); }catch(e){} } else { soundBtn.classList.remove('on'); soundBtn.classList.add('muted'); soundBtn.setAttribute('aria-pressed','false'); soundBtn.innerText='🔇'; try{ bgMusic.pause(); bgMusic.currentTime=0; }catch(e){} } });
+
+safeBtn.addEventListener('click', ()=>handleChoice(false)); dangerBtn.addEventListener('click', ()=>handleChoice(true)); sendBtn.addEventListener('click', sendPlayerInput);
+playerInput.addEventListener('keypress', e=>{ if(e.key==='Enter') sendPlayerInput(); });
+
+nextBtn.addEventListener('click', ()=>{ const t = nextBtn.dataset.type || 'next'; if(t === 'next'){ if(confettiActive){ confettiActive=false; confettiEl.innerHTML=''; setTimeout(()=>{ nextBtn.style.display='none'; gameCard.style.paddingBottom='16px'; currentLevel++; loadLevel(); },120); } else { nextBtn.style.display='none'; gameCard.style.paddingBottom='16px'; currentLevel++; loadLevel(); } } else { if(confettiActive){ confettiActive=false; confettiEl.innerHTML=''; setTimeout(()=>{ saveRecordAndShowResult(); },120); } else saveRecordAndShowResult(); } });
+
+restartFinalBtn.addEventListener('click', ()=>{ levelData.forEach(l=>{ l.answers=[]; l.score=0; }); currentLevel=0; currentDialogue=0; choiceMade=false; cumulativeScore=0; try{ bgMusic.pause(); bgMusic.currentTime=0; }catch(e){} soundEnabled=false; showHome(); });
+
+// init
+renderHomeAvatars(); showHome();
+
+// ensure chat scrolling behavior on resize
+window.addEventListener('resize', ()=>{ try{ if(nextBtn.style.display==='block' && nextBtn.dataset.type){ if(!window.matchMedia('(max-width:520px)').matches) gameCard.style.paddingBottom='120px'; } }catch(e){} });
+
+</script>
+</body>
+</html>
